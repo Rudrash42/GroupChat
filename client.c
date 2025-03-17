@@ -1,11 +1,11 @@
 #include <arpa/inet.h>
 #include <malloc.h>
 #include <netinet/in.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
-#include <stdbool.h>
-#include <unistd.h>
 #include <sys/socket.h>
+#include <unistd.h>
 
 int createTCPIpv4Socket() { return socket(AF_INET, SOCK_STREAM, 0); }
 
@@ -22,6 +22,32 @@ struct sockaddr_in *createIPv4Address(char *ip, int port) {
   return address;
 }
 
+void listenOnThreads(int socketFD) {
+
+  char buffer[1024];
+
+  while (true) {
+    ssize_t amountReceived = recv(socketFD, buffer, 1024, 0);
+
+    if (amountReceived > 0) {
+      buffer[amountReceived] = 0;
+      printf("%s ", buffer);
+      printf("\n");
+    }
+
+    if (amountReceived == 0)
+      break;
+  }
+
+  close(socketFD);
+}
+
+void startListening(int socketFD) {
+
+  pthread_t id;
+  pthread_create(&id, NULL, listenOnThreads, socketFD);
+}
+
 int main() {
 
   int socketFD = createTCPIpv4Socket();
@@ -35,18 +61,31 @@ int main() {
   else
     printf("Connection Failed\n");
 
+  char *name = NULL;
+  size_t nameSize = 0;
+  printf("please enter your name?\n");
+  ssize_t nameCount = getline(&name, &nameSize, stdin);
+  name[nameCount - 1] = 0;
+
   char *message = NULL;
   size_t messageSize = 0;
-  printf("Enter your message");
+  printf("Enter your message\n");
 
-  while(true){
+  startListening(socketFD);
+
+  char buffer[1024];
+
+  while (true) {
     ssize_t charCount = getline(&message, &messageSize, stdin);
+    message[charCount - 1] = 0;
 
-      if(charCount > 0 && strcmp(message, "exit\n") == 0) break;
-      else if(charCount > 0) {
-        ssize_t amountSent = send(socketFD, message, charCount, 0);
-      }
+    sprintf(buffer, "%s: %s", name, message);
 
+    if (charCount > 0 && strcmp(message, "exit") == 0)
+      break;
+    else if (charCount > 0) {
+      ssize_t amountSent = send(socketFD, buffer, strlen(buffer), 0);
+    }
   }
 
   close(socketFD);

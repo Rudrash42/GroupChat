@@ -5,9 +5,20 @@
 #include <string.h>
 #include <malloc.h>
 #include <stdbool.h>
+#include <pthread.h>
 #include <unistd.h>
 
+struct acceptedSocket{
 
+  int acceptedSocketFD;
+  struct sockaddr_in address;
+  int error;
+  bool result;
+
+};
+
+struct acceptedSocket acceptedArray[10] ;
+int acceptedSocketsCount = 0;
 
 int createTCPIpv4Socket() { return socket(AF_INET, SOCK_STREAM, 0); }
 
@@ -26,6 +37,84 @@ struct sockaddr_in* createIPv4Address(char *ip, int port) {
     return address;
 }
 
+struct acceptedSocket* acceptClient(int serverSocketFD){
+
+  struct sockaddr_in clientAddress;
+  int clientAddressSize = sizeof(clientAddress);
+  int clientSocketFD = accept(serverSocketFD, (struct sockaddr*)&clientAddress, &clientAddressSize);
+  
+
+  struct acceptedSocket* acceptedClientSocket = malloc(sizeof(struct acceptedSocket));
+
+  acceptedClientSocket -> address = clientAddress;
+  acceptedClientSocket -> acceptedSocketFD = clientSocketFD;
+  acceptedClientSocket -> result = clientSocketFD > 0;
+  if(!acceptedClientSocket -> result)acceptedClientSocket -> error = clientSocketFD;
+
+  return acceptedClientSocket;
+
+}
+
+void propogateToThreads(char* buffer, int socketFD){
+
+  for (int i = 0; i < acceptedSocketsCount; i++)
+  {
+    if(acceptedArray[i].acceptedSocketFD != socketFD){
+      send(acceptedArray[i].acceptedSocketFD, buffer, strlen(buffer), 0);
+    }
+  }
+  
+}
+
+void receiveandPrintIncomingData(int socketFD){
+  char buffer[1024];
+
+  while (true)
+  {
+    ssize_t amountReceived =   recv(socketFD, buffer, 1024,0);
+    if(amountReceived > 0) {
+        buffer[amountReceived] = 0;
+        printf("%s ", buffer);
+        printf("\n");
+
+        propogateToThreads(buffer, socketFD);
+    }
+    if(amountReceived == 0) break;
+  }
+
+    close(socketFD);
+
+  }
+
+void receiveandPrintonThread(struct acceptedSocket* clientSocket){
+
+    pthread_t id;
+
+    // int *clientFD = malloc(sizeof(int));
+    // if (clientFD == NULL) {
+    //     perror("Memory allocation failed");
+    //     return;
+    // }
+    // *clientFD = clientSocket->acceptedSocketFD;
+
+    pthread_create(&id, NULL, receiveandPrintIncomingData, clientSocket -> acceptedSocketFD);
+
+}
+
+void startConnecting(int serverSocketFD){
+
+  while(true){
+
+    struct acceptedSocket* clientSocket = acceptClient(serverSocketFD);
+    acceptedArray[acceptedSocketsCount++] = *clientSocket;
+
+    receiveandPrintonThread(clientSocket);
+
+  }
+
+}
+
+
 int main(){
 
   int serverSocketFD = createTCPIpv4Socket();
@@ -37,24 +126,9 @@ int main(){
   else printf("Socket binding failed\n");
 
   int listenResult = listen(serverSocketFD, 10);
-  
-  struct sockaddr_in clientAddress;
-  int clientAddressSize = sizeof(clientAddress);
-  int clientSocketFD = accept(serverSocketFD, (struct sockaddr*)&clientAddress, &clientAddressSize);
 
-  char buffer[1024];
-
-  while (true)
-  {
-    ssize_t amountReceived =   recv(clientSocketFD, buffer, 1024,0);
-    if(amountReceived > 0) {
-        buffer[amountReceived] = 0;
-        printf("The message %s was received", buffer);
-    }
-    if(amountReceived == 0) break;
-  }
+  startConnecting(serverSocketFD); 
   
-  close(clientSocketFD);
   close(serverSocketFD);
 
   return 0;
