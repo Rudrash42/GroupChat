@@ -3,6 +3,8 @@
 #include <netinet/in.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdbool.h>
+#include <unistd.h>
 #include <sys/socket.h>
 
 int createTCPIpv4Socket() { return socket(AF_INET, SOCK_STREAM, 0); }
@@ -17,7 +19,6 @@ struct sockaddr_in *createIPv4Address(char *ip, int port) {
     address->sin_addr.s_addr = INADDR_ANY;
   else
     inet_pton(AF_INET, ip, &address->sin_addr.s_addr);
-
   return address;
 }
 
@@ -35,12 +36,20 @@ int main() {
     printf("Connection Failed\n");
 
   char *message = NULL;
-  size_t lineSize = 0;
+  size_t messageSize = 0;
+  printf("Enter your message");
 
-  ssize_t charCount = getline() send(socketFD, message, strlen(message), 0);
+  while(true){
+    ssize_t charCount = getline(&message, &messageSize, stdin);
 
-  char buffer[1024];
-  recv(socketFD, buffer, 1024, 0);
+      if(charCount > 0 && strcmp(message, "exit\n") == 0) break;
+      else if(charCount > 0) {
+        ssize_t amountSent = send(socketFD, message, charCount, 0);
+      }
+
+  }
+
+  close(socketFD);
 
   return 0;
 }

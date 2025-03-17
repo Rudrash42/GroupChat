@@ -4,6 +4,9 @@
 #include <arpa/inet.h>
 #include <string.h>
 #include <malloc.h>
+#include <stdbool.h>
+#include <unistd.h>
+
 
 
 int createTCPIpv4Socket() { return socket(AF_INET, SOCK_STREAM, 0); }
@@ -40,9 +43,19 @@ int main(){
   int clientSocketFD = accept(serverSocketFD, (struct sockaddr*)&clientAddress, &clientAddressSize);
 
   char buffer[1024];
-  recv(clientSocketFD, buffer, 1024,0);
 
-  printf("%s", buffer);
+  while (true)
+  {
+    ssize_t amountReceived =   recv(clientSocketFD, buffer, 1024,0);
+    if(amountReceived > 0) {
+        buffer[amountReceived] = 0;
+        printf("The message %s was received", buffer);
+    }
+    if(amountReceived == 0) break;
+  }
+  
+  close(clientSocketFD);
+  close(serverSocketFD);
 
   return 0;
 
